@@ -1,0 +1,173 @@
+Machine Learning Basics — Study Notes
+======================================
+
+1. What is Machine Learning?
+-----------------------------
+
+Machine learning is a branch of artificial intelligence where systems learn patterns from data instead of being explicitly programmed. A traditional program follows fixed rules written by a developer. A machine learning model, by contrast, looks at examples and figures out the rules on its own.
+
+The core idea: given a dataset of inputs and outputs, the model finds a mathematical relationship between them. Once it has learned this relationship, it can make predictions on new, unseen inputs.
+
+Example: instead of writing rules like "if the email contains 'free money', mark it as spam," you give the model 10,000 emails labeled as spam or not-spam, and it learns which patterns are associated with spam.
+
+Machine learning is used in recommendation systems (Netflix, Spotify), search engines, voice assistants, fraud detection, medical diagnosis, self-driving cars, and many other applications.
+
+
+2. Supervised Learning
+-----------------------
+
+Supervised learning is the most common type of machine learning. The training data consists of input-output pairs — each input has a known correct output (called a "label"). The model learns to map inputs to outputs by studying these examples.
+
+There are two main tasks in supervised learning:
+
+Classification: predicting a category. Examples include spam vs. not-spam, disease vs. healthy, cat vs. dog. The output is a discrete class label.
+
+Regression: predicting a continuous number. Examples include house price prediction, temperature forecasting, and salary estimation. The output is a numerical value.
+
+The supervised learning process:
+1. Collect labeled training data
+2. Choose a model architecture
+3. Train the model — it adjusts its internal parameters to minimize prediction errors
+4. Evaluate on test data the model has never seen
+5. Deploy for predictions on new data
+
+Key algorithms: linear regression, logistic regression, decision trees, random forests, support vector machines, and neural networks.
+
+The main risk in supervised learning is overfitting — when the model memorizes the training data instead of learning general patterns. An overfit model performs well on training data but poorly on new data. Techniques to prevent overfitting include using more training data, regularization, cross-validation, and early stopping.
+
+
+3. Unsupervised Learning
+--------------------------
+
+Unsupervised learning works with data that has no labels. The model finds structure, patterns, or groupings in the data on its own — without being told what the "right answer" is.
+
+Clustering is the most common unsupervised task. The model groups similar data points together. K-means clustering, for instance, divides data into K groups where each point belongs to the cluster with the nearest center. Applications include customer segmentation, document grouping, and anomaly detection.
+
+Dimensionality reduction is another unsupervised technique. It reduces the number of features in a dataset while preserving important information. Principal Component Analysis (PCA) is the most widely used method. This is useful when datasets have hundreds of features — reducing to 2-3 dimensions makes visualization possible.
+
+The key difference from supervised learning: in supervised learning, you tell the model "this email is spam." In unsupervised learning, you say "here are 10,000 emails — find groups." The model might discover clusters that correspond to spam, newsletters, personal emails, etc. — but it doesn't know the names of these groups.
+
+Unsupervised learning is valuable when labeled data is expensive or impossible to obtain. Labeling medical images, for example, requires expert doctors. Unsupervised methods can find patterns without that cost.
+
+
+4. Training, Validation, and Test Sets
+----------------------------------------
+
+A fundamental rule in machine learning: never evaluate a model on the data it was trained on. The model has already seen those examples — good performance on them proves nothing about how it will perform on new data.
+
+The standard approach is to split data into three sets:
+
+Training set (typically 60-80% of data): the model learns from this. It sees both the inputs and the correct outputs, and adjusts its parameters to minimize errors.
+
+Validation set (typically 10-20%): used during development to tune hyperparameters (like learning rate, number of layers, regularization strength). The model never trains on this data, but you use its performance here to make design decisions.
+
+Test set (typically 10-20%): used only once, at the very end, to get a final unbiased estimate of model performance. You do not tune anything based on test set results.
+
+Why three sets instead of two? If you use the validation set to pick your best model, you've indirectly optimized for it. The test set gives you a truly independent measurement.
+
+Cross-validation is an alternative approach where you split the training data into K parts ("folds"). You train on K-1 folds and validate on the remaining fold, rotating which fold is held out. This gives K different performance estimates, which you average. This is especially useful when data is limited.
+
+
+5. Loss Functions and Optimization
+------------------------------------
+
+A loss function measures how wrong the model's predictions are. It produces a single number: high loss means bad predictions, low loss means good predictions. The goal of training is to minimize this number.
+
+Common loss functions:
+
+Mean Squared Error (MSE) is used for regression. It computes the average of the squared differences between predicted and actual values. Squaring makes all errors positive and penalizes large errors more than small ones. Formula: MSE = (1/n) * sum of (predicted - actual)^2.
+
+Cross-Entropy Loss is used for classification. It measures how different the model's predicted probability distribution is from the actual distribution. A model that predicts 90% confidence for the correct class has low cross-entropy loss. A model that predicts 10% for the correct class has high loss.
+
+Optimization is how the model minimizes the loss function. Gradient descent is the most common method. The idea: compute the gradient (slope) of the loss with respect to each parameter, then update each parameter in the direction that reduces the loss. The learning rate controls how big each step is.
+
+Stochastic Gradient Descent (SGD) computes the gradient on a small random batch of data instead of the entire dataset. This is faster and often leads to better generalization. Adam is a popular variant that adapts the learning rate for each parameter individually.
+
+The learning rate is critical. Too large and the model overshoots the minimum. Too small and training takes forever. Learning rate scheduling — starting with a larger rate and reducing it over time — is a common technique.
+
+
+6. Evaluation Metrics
+----------------------
+
+Accuracy is the simplest metric: what fraction of predictions were correct? But accuracy can be misleading. If 99% of emails are not spam, a model that always predicts "not spam" has 99% accuracy — but it catches zero spam.
+
+Precision measures: of all the items the model predicted as positive, how many were actually positive? High precision means few false positives. A spam filter with high precision rarely marks good emails as spam.
+
+Recall measures: of all the actual positive items, how many did the model catch? High recall means few false negatives. A spam filter with high recall catches most spam, even if it sometimes marks a good email as spam too.
+
+F1 Score is the harmonic mean of precision and recall. It balances both metrics. F1 = 2 * (precision * recall) / (precision + recall). It is useful when you need a single number that accounts for both false positives and false negatives.
+
+Confusion matrix is a table showing four values: true positives (correctly predicted positive), true negatives (correctly predicted negative), false positives (predicted positive but actually negative), and false negatives (predicted negative but actually positive). Every classification metric can be derived from these four numbers.
+
+For regression, common metrics include Mean Absolute Error (MAE), Mean Squared Error (MSE), and R-squared (R2). R-squared indicates how much of the variance in the data the model explains — 1.0 is perfect, 0.0 means the model is no better than predicting the average.
+
+
+7. Feature Engineering
+------------------------
+
+Features are the input variables the model uses to make predictions. Feature engineering is the process of creating, selecting, and transforming features to improve model performance. It is often the most impactful part of a machine learning project.
+
+Common techniques:
+
+Normalization scales features to a standard range (typically 0 to 1 or -1 to 1). This prevents features with large values (like salary in thousands) from dominating features with small values (like age in decades). Many algorithms — especially gradient-based ones — perform better with normalized inputs.
+
+One-hot encoding converts categorical variables into binary columns. A "color" feature with values {red, green, blue} becomes three columns: is_red, is_green, is_blue. Each column is 0 or 1. This is necessary because most ML algorithms work with numbers, not text categories.
+
+Feature selection removes irrelevant or redundant features. Too many features can cause overfitting (the model learns noise instead of signal) and increase computation cost. Methods include correlation analysis, mutual information, and recursive feature elimination.
+
+Missing value handling: real-world data often has gaps. Common strategies include dropping rows with missing values, filling with the mean/median, or using a model to predict missing values. The right strategy depends on how much data is missing and why.
+
+The quality of features often matters more than the choice of algorithm. A simple model with well-engineered features frequently outperforms a complex model with raw, unprocessed features.
+
+
+8. Decision Trees and Random Forests
+--------------------------------------
+
+A decision tree makes predictions by learning a series of if-then rules from the data. It splits the data at each node based on a feature and a threshold. The tree keeps splitting until it reaches a decision (a leaf node).
+
+Example: to predict whether someone will buy a product, a decision tree might first ask "Is age > 30?" Then for each branch, it might ask "Is income > 50,000?" Each leaf node gives a prediction (buy or not buy).
+
+Advantages: decision trees are easy to interpret and visualize. You can trace exactly why the model made a prediction. They handle both numerical and categorical features. They require little data preprocessing.
+
+Disadvantages: a single decision tree tends to overfit — it creates overly specific rules that don't generalize. Small changes in data can produce a completely different tree. This is called high variance.
+
+Random forests solve the overfitting problem by building many decision trees (typically 100-1000) and combining their predictions. Each tree is trained on a random subset of the data (bagging) and considers only a random subset of features at each split. The final prediction is the majority vote (classification) or average (regression) of all trees.
+
+This ensemble approach reduces variance dramatically. Random forests are one of the most reliable out-of-the-box ML algorithms. They work well on a wide range of problems with minimal tuning.
+
+
+9. Neural Networks
+-------------------
+
+A neural network is a model inspired by the structure of the human brain. It consists of layers of interconnected nodes (neurons). Each connection has a weight, and each neuron has a bias. The model learns by adjusting these weights and biases during training.
+
+Architecture of a basic neural network:
+- Input layer: receives the features (one node per feature)
+- Hidden layers: intermediate layers that transform the input. Each node computes a weighted sum of its inputs, adds a bias, and passes the result through an activation function
+- Output layer: produces the final prediction
+
+Activation functions introduce non-linearity. Without them, a neural network would just be a linear model regardless of depth. Common activation functions include ReLU (Rectified Linear Unit), which outputs max(0, x), sigmoid, which outputs values between 0 and 1, and softmax, which outputs a probability distribution across classes.
+
+Backpropagation is how neural networks learn. After making a prediction, the model computes the loss. It then propagates the error backward through the network, computing how much each weight contributed to the error. Each weight is updated to reduce the loss. This process repeats for many iterations (epochs) over the training data.
+
+Deep learning refers to neural networks with many hidden layers. Deep networks can learn hierarchical representations — early layers learn simple patterns (edges, textures), while later layers combine them into complex features (faces, objects). Deep learning has driven breakthroughs in image recognition, natural language processing, and game playing.
+
+Training deep networks requires large datasets and significant computational power (GPUs/TPUs). Techniques like dropout (randomly disabling neurons during training), batch normalization, and transfer learning help improve training efficiency and model performance.
+
+
+10. Bias and Fairness in ML
+-----------------------------
+
+Machine learning models can inherit and amplify biases present in their training data. If a hiring model is trained on historical data where most hired candidates were male, the model may learn to prefer male applicants — not because gender is predictive of job performance, but because the training data reflected existing bias.
+
+Types of bias:
+
+Selection bias occurs when training data is not representative of the real-world population. A medical model trained only on data from one hospital may not work well for patients at other hospitals.
+
+Measurement bias happens when the features or labels are measured differently for different groups. Standardized test scores, for instance, may measure test-taking ability more than actual knowledge for certain populations.
+
+Confirmation bias in ML occurs when the model's predictions are used to generate future training data, creating a feedback loop. Predictive policing is a well-known example: the model sends more police to areas it predicts as high-crime, leading to more arrests there, which confirms the prediction — even if the actual crime rate was similar elsewhere.
+
+Mitigation strategies include auditing models for disparate impact across groups, using fairness-aware algorithms, ensuring diverse and representative training data, and having human oversight for high-stakes decisions. There is no single definition of "fairness" in ML — different mathematical definitions can be mutually exclusive.
+
+Building fair ML systems is not just a technical problem. It requires understanding the social context, consulting affected communities, and making deliberate choices about which tradeoffs are acceptable.
