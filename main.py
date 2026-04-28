@@ -17,9 +17,9 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 MISSING = []
 try:
-    import google.generativeai as genai
+    from openai import OpenAI
 except ImportError:
-    MISSING.append("google-generativeai")
+    MISSING.append("openai")
 try:
     import chromadb
 except ImportError:
@@ -44,6 +44,7 @@ COLLECTION_NAME = "notes"
 DIFFICULTY_UP = 0.70    # 70 % → level up
 DIFFICULTY_DOWN = 0.40  # 40 % → level down
 DIFFICULTIES = ["easy", "medium", "hard"]
+MODEL_NAME = "llama-3.3-70b-versatile"  # Groq free model
 
 # ---------------------------------------------------------------------------
 # 1.  Document loading, chunking, and vector store
@@ -201,26 +202,46 @@ def show_stats(perf: dict):
 
 
 # ---------------------------------------------------------------------------
-# 3.  LLM helpers  (Gemini)
+# 3.  LLM helpers  (Groq — OpenAI-compatible SDK)
 # ---------------------------------------------------------------------------
 
-def get_client():
-    """Configure and return a Gemini model. Requires GEMINI_API_KEY env var."""
-    api_key = os.environ.get("GEMINI_API_KEY")
+def get_client() -> OpenAI:
+    """Return a Groq client via OpenAI SDK. Requires GROQ_API_KEY env var."""
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         print("❌  Set your API key first:")
-        print('    $env:GEMINI_API_KEY="your-key-here"')
-        print("  Get a free key at: https://aistudio.google.com/apikey")
+        print('    $env:GROQ_API_KEY="your-key-here"')
+        print("  Get a free key at: https://console.groq.com")
         sys.exit(1)
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.0-flash")
+    return OpenAI(
+        api_key=api_key,
+        base_url="https://api.groq.com/openai/v1",
+    )
 
 
-def call_llm(model, system_prompt: str, user_prompt: str) -> str:
-    """Call Gemini and return the text response."""
-    full_prompt = f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nUSER REQUEST:\n{user_prompt}"
-    response = model.generate_content(full_prompt)
-    return response.text
+def call_llm(client: OpenAI, system_prompt: str, user_prompt: str, tools: list = None) -> str:
+    """Call Groq (Llama) via OpenAI SDK and return the text response."""
+    kwargs = {
+        "model": MODEL_NAME,
+        "max_tokens": 2048,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
+
+    response = client.chat.completions.create(**kwargs)
+
+    msg = response.choices[0].message
+
+    # If the response contains tool calls, return the full message (Milestone 4)
+    if msg.tool_calls:
+        return response
+
+    return msg.content
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +275,7 @@ DIFFICULTY_PROMPTS = {
 }
 
 
-def run_mcq_quiz(model, collection, embedder, perf: dict, topics: list[str]):
+def run_mcq_quiz(client, collection, embedder, perf: dict, topics: list[str]):
     """Milestone 1 + 3:  MCQ quiz with adaptive difficulty."""
     difficulty = "medium"  # default
     if perf:
@@ -270,7 +291,7 @@ def run_mcq_quiz(model, collection, embedder, perf: dict, topics: list[str]):
     user = f"Source material:\n\n{context}"
 
     print(f"\n🎯  Generating {difficulty.upper()} MCQ quiz...\n")
-    raw = call_llm(model, system, user)
+    raw = call_llm(client, system, user)
 
     # Parse JSON — strip markdown fences if present
     raw = raw.strip()
@@ -282,7 +303,7 @@ def run_mcq_quiz(model, collection, embedder, perf: dict, topics: list[str]):
         questions = json.loads(raw)
     except json.JSONDecodeError:
         print("⚠️  LLM returned malformed JSON. Trying again...")
-        raw2 = call_llm(model, system, user)
+        raw2 = call_llm(client, system, user)
         raw2 = raw2.strip()
         if raw2.startswith("```"):
             raw2 = re.sub(r"^```\w*\n?", "", raw2)
@@ -379,7 +400,7 @@ Return EXACTLY this JSON and nothing else — no markdown fences, no commentary:
 """
 
 
-def run_open_quiz(model, collection, embedder, perf: dict, topics: list[str]):
+def run_open_quiz(client, collection, embedder, perf: dict, topics: list[str]):
     """Milestone 2 + 3: Open-ended quiz with LLM grading."""
     difficulty = "medium"
     if perf:
@@ -395,7 +416,7 @@ def run_open_quiz(model, collection, embedder, perf: dict, topics: list[str]):
     user = f"Source material:\n\n{context}"
 
     print(f"\n📝  Generating {difficulty.upper()} open-ended questions...\n")
-    raw = call_llm(model, system, user)
+    raw = call_llm(client, system, user)
     raw = raw.strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```\w*\n?", "", raw)
@@ -428,7 +449,7 @@ def run_open_quiz(model, collection, embedder, perf: dict, topics: list[str]):
             f"Reference passage: {q.get('reference_passage', 'N/A')}\n"
             f"Student's answer: {answer}"
         )
-        grade_raw = call_llm(model, GRADING_SYSTEM, grade_user)
+        grade_raw = call_llm(client, GRADING_SYSTEM, grade_user)
         grade_raw = grade_raw.strip()
         if grade_raw.startswith("```"):
             grade_raw = re.sub(r"^```\w*\n?", "", grade_raw)
@@ -462,44 +483,50 @@ def run_open_quiz(model, collection, embedder, perf: dict, topics: list[str]):
 # 6.  Study Plan with Tool Calling  (Milestone 4)
 # ---------------------------------------------------------------------------
 
-def get_plan_tools():
-    """Build Gemini function declarations for the study plan tools."""
-    return [
-        genai.types.Tool(
-            function_declarations=[
-                genai.types.FunctionDeclaration(
-                    name="get_performance_summary",
-                    description="Returns an overview of the student's performance across all topics including attempts, average score percentage, and current difficulty level for each topic.",
-                    parameters=genai.types.Schema(
-                        type=genai.types.Type.OBJECT,
-                        properties={},
-                    ),
-                ),
-                genai.types.FunctionDeclaration(
-                    name="get_weak_topics",
-                    description="Returns topics where the student's average score is below the given threshold (0-1 scale). Only returns topics where the student has answered at least 3 questions to ensure statistical significance.",
-                    parameters=genai.types.Schema(
-                        type=genai.types.Type.OBJECT,
-                        properties={
-                            "threshold": genai.types.Schema(
-                                type=genai.types.Type.NUMBER,
-                                description="Score threshold between 0 and 1. Topics with average below this are considered weak.",
-                            ),
-                        },
-                        required=["threshold"],
-                    ),
-                ),
-                genai.types.FunctionDeclaration(
-                    name="get_notes_outline",
-                    description="Returns the list of all topic names available in the study notes, so the study plan can reference real topics.",
-                    parameters=genai.types.Schema(
-                        type=genai.types.Type.OBJECT,
-                        properties={},
-                    ),
-                ),
-            ]
-        )
-    ]
+# Define the three tools in OpenAI function-calling format (works with Groq)
+PLAN_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_performance_summary",
+            "description": "Returns an overview of the student's performance across all topics including attempts, average score percentage, and current difficulty level for each topic.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weak_topics",
+            "description": "Returns topics where the student's average score is below the given threshold (0-1 scale). Only returns topics where the student has answered at least 3 questions to ensure statistical significance.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "threshold": {
+                        "type": "number",
+                        "description": "Score threshold between 0 and 1. Topics with average below this are considered weak.",
+                    }
+                },
+                "required": ["threshold"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_notes_outline",
+            "description": "Returns the list of all topic names available in the study notes, so the study plan can reference real topics.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+]
 
 
 def execute_tool(tool_name: str, tool_input: dict, perf: dict, topics: list[str]) -> str:
@@ -560,55 +587,53 @@ If there is insufficient data (very few attempts), say so honestly and recommend
 """
 
 
-def run_study_plan(perf: dict, topics: list[str]):
-    """Milestone 4: Tool-calling study plan generation using Gemini function calling."""
+def run_study_plan(client, perf: dict, topics: list[str]):
+    """Milestone 4: Tool-calling study plan generation using Groq function calling."""
     if not perf:
         print("\n📋  No performance data yet. Take some quizzes first!\n")
         return
 
     print("\n📋  Generating your personalized study plan...\n")
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    genai.configure(api_key=api_key)
-
-    plan_tools = get_plan_tools()
-    plan_model = genai.GenerativeModel(
-        "gemini-2.0-flash",
-        system_instruction=PLAN_SYSTEM,
-        tools=plan_tools,
-    )
-
-    chat = plan_model.start_chat()
-    response = chat.send_message("Create a personalized study plan for me based on my quiz performance.")
+    messages = [
+        {"role": "system", "content": PLAN_SYSTEM},
+        {"role": "user", "content": "Create a personalized study plan for me based on my quiz performance."},
+    ]
 
     # Tool-call loop
     max_iterations = 10
     for _ in range(max_iterations):
-        function_calls = []
-        for part in response.parts:
-            if hasattr(part, "function_call") and part.function_call.name:
-                function_calls.append(part.function_call)
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            max_tokens=2048,
+            messages=messages,
+            tools=PLAN_TOOLS,
+            tool_choice="auto",
+        )
 
-        if not function_calls:
-            for part in response.parts:
-                if hasattr(part, "text") and part.text:
-                    print(part.text)
+        msg = response.choices[0].message
+
+        # If no tool calls, print final response
+        if not msg.tool_calls:
+            if msg.content:
+                print(msg.content)
             print()
             return
 
-        # Execute each function call and send results back
-        function_responses = []
-        for fc in function_calls:
-            tool_input = dict(fc.args) if fc.args else {}
-            result = execute_tool(fc.name, tool_input, perf, topics)
-            function_responses.append(
-                genai.types.Part.from_function_response(
-                    name=fc.name,
-                    response={"result": json.loads(result)},
-                )
-            )
+        # Add assistant message with tool calls to history
+        messages.append(msg)
 
-        response = chat.send_message(function_responses)
+        # Execute each tool call and add results
+        for tool_call in msg.tool_calls:
+            fn_name = tool_call.function.name
+            fn_args = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
+            result = execute_tool(fn_name, fn_args, perf, topics)
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": result,
+            })
 
     print("⚠️  Study plan generation took too many iterations.\n")
 
@@ -653,7 +678,7 @@ def main():
     collection, embedder = build_vector_store(chunks)
 
     # LLM client
-    model = get_client()
+    client = get_client()
 
     # Load existing performance
     perf = load_performance()
@@ -676,13 +701,13 @@ def main():
         elif cmd == "/help":
             print_help()
         elif cmd == "/quiz open":
-            run_open_quiz(model, collection, embedder, perf, topics)
+            run_open_quiz(client, collection, embedder, perf, topics)
         elif cmd == "/quiz":
-            run_mcq_quiz(model, collection, embedder, perf, topics)
+            run_mcq_quiz(client, collection, embedder, perf, topics)
         elif cmd == "/stats":
             show_stats(perf)
         elif cmd == "/plan":
-            run_study_plan(perf, topics)
+            run_study_plan(client, perf, topics)
         else:
             print("  Unknown command. Type /help for options.\n")
 
